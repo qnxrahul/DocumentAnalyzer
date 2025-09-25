@@ -1,0 +1,119 @@
+<div class="container">
+  <h2>Document Analyzer for Auditors</h2>
+
+  <section id="upload">
+    <h3>Upload / Paste Data</h3>
+    <textarea rows="10" (input)="onCsvTextChange(($any($event.target)?.value) ?? '')" placeholder="Paste CSV with columns like: period,revenue,netIncome,assets,liabilities..."></textarea>
+  </section>
+
+  <section id="exec">
+    <h3 (click)="execExpanded.set(!execExpanded())">1. Executive Summary</h3>
+    <div *ngIf="analysis()?.executiveSummary && execExpanded() as exec">
+      <p><strong>Purpose:</strong> {{ analysis()!.executiveSummary.purpose }}</p>
+      <p><strong>Reporting period:</strong> {{ analysis()!.executiveSummary.reportingPeriod }}</p>
+      <p><strong>Key highlights:</strong> Rev {{ analysis()!.executiveSummary.keyHighlights.revenue }} | NI {{ analysis()!.executiveSummary.keyHighlights.netIncome }} | A {{ analysis()!.executiveSummary.keyHighlights.assets }} | L {{ analysis()!.executiveSummary.keyHighlights.liabilities }}</p>
+      <ul>
+        <li *ngFor="let c of analysis()!.executiveSummary.majorChanges">{{ c }}</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="metrics">
+    <h3 (click)="metricsExpanded.set(!metricsExpanded())">2. Financial Metrics & Ratios</h3>
+    <div *ngIf="analysis() && metricsExpanded()">
+      <ul>
+        <li><strong>Gross margin:</strong> {{ (analysis()!.financialMetrics.profitability.grossMargin ?? 0) | number:'1.2-2' }}</li>
+        <li><strong>Net margin:</strong> {{ (analysis()!.financialMetrics.profitability.netMargin ?? 0) | number:'1.2-2' }}</li>
+        <li><strong>ROE:</strong> {{ (analysis()!.financialMetrics.profitability.returnOnEquity ?? 0) | number:'1.2-2' }}</li>
+        <li><strong>Current ratio:</strong> {{ (analysis()!.financialMetrics.liquidity.currentRatio ?? 0) | number:'1.2-2' }}</li>
+        <li><strong>Quick ratio:</strong> {{ (analysis()!.financialMetrics.liquidity.quickRatio ?? 0) | number:'1.2-2' }}</li>
+        <li><strong>Debt-to-equity:</strong> {{ (analysis()!.financialMetrics.solvency.debtToEquity ?? 0) | number:'1.2-2' }}</li>
+        <li><strong>Interest coverage:</strong> {{ (analysis()!.financialMetrics.solvency.interestCoverage ?? 0) | number:'1.2-2' }}</li>
+        <li><strong>Inventory turnover:</strong> {{ (analysis()!.financialMetrics.efficiency.inventoryTurnover ?? 0) | number:'1.2-2' }}</li>
+        <li><strong>Receivables turnover:</strong> {{ (analysis()!.financialMetrics.efficiency.receivablesTurnover ?? 0) | number:'1.2-2' }}</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="risk">
+    <h3 (click)="riskExpanded.set(!riskExpanded())">3. Compliance & Risk Indicators</h3>
+    <div *ngIf="analysis() && riskExpanded()">
+      <p><strong>Missing/Inconsistent:</strong></p>
+      <ul>
+        <li *ngFor="let x of analysis()!.complianceAndRisk.missingOrInconsistent">{{ x }}</li>
+      </ul>
+      <p><strong>Unusual transactions:</strong></p>
+      <ul>
+        <li *ngFor="let x of analysis()!.complianceAndRisk.unusualTransactions">{{ x }}</li>
+      </ul>
+      <p><strong>Late filings/delays:</strong></p>
+      <ul>
+        <li *ngFor="let x of analysis()!.complianceAndRisk.lateFilingsOrDelays">{{ x }}</li>
+      </ul>
+      <p><strong>Non-compliance notes:</strong></p>
+      <ul>
+        <li *ngFor="let x of analysis()!.complianceAndRisk.nonComplianceNotes">{{ x }}</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="trends">
+    <h3 (click)="trendsExpanded.set(!trendsExpanded())">4. Trend Analysis</h3>
+    <div *ngIf="trendsExpanded()">
+      <ag-charts [options]="chartOptions()"></ag-charts>
+    </div>
+  </section>
+
+  <section id="anomalies">
+    <h3 (click)="anomaliesExpanded.set(!anomaliesExpanded())">5. Anomaly Detection</h3>
+    <div *ngIf="analysis() && anomaliesExpanded()">
+      <ul>
+        <li *ngFor="let n of analysis()!.anomalies.notes">{{ n }}</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="structure">
+    <h3 (click)="structureExpanded.set(!structureExpanded())">6. Document Structure Insights</h3>
+    <div *ngIf="analysis() && structureExpanded()">
+      <ul>
+        <li *ngFor="let t of analysis()!.structure.tableOfContents">
+          <a [href]="'#' + t.anchor">{{ t.title }}</a>
+        </li>
+      </ul>
+      <p><strong>Glossary:</strong> {{ analysis()!.structure.glossary.join(', ') }}</p>
+    </div>
+  </section>
+
+  <section id="highlights">
+    <h3 (click)="highlightsExpanded.set(!highlightsExpanded())">7. Audit-Relevant Highlights</h3>
+    <div *ngIf="analysis() && highlightsExpanded()">
+      <p><strong>Judgment areas:</strong></p>
+      <ul><li *ngFor="let x of analysis()!.auditHighlights.areasRequiringJudgment">{{ x }}</li></ul>
+      <p><strong>Estimates & assumptions:</strong></p>
+      <ul><li *ngFor="let x of analysis()!.auditHighlights.estimatesAndAssumptions">{{ x }}</li></ul>
+      <p><strong>Internal controls:</strong></p>
+      <ul><li *ngFor="let x of analysis()!.auditHighlights.internalControlDisclosures">{{ x }}</li></ul>
+      <p *ngIf="analysis()!.auditHighlights.auditorsOpinion"><strong>Auditor's opinion:</strong> {{ analysis()!.auditHighlights.auditorsOpinion }}</p>
+    </div>
+  </section>
+
+  <section id="links">
+    <h3 (click)="linksExpanded.set(!linksExpanded())">8. Supporting Document Links</h3>
+    <div *ngIf="analysis() && linksExpanded()">
+      <ul>
+        <li *ngFor="let l of analysis()!.supportingLinks"><a [href]="l.href" target="_blank" rel="noopener">{{ l.description || l.href }}</a></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="ai">
+    <h3 (click)="aiExpanded.set(!aiExpanded())">AI-Powered Suggestions</h3>
+    <div *ngIf="analysis() && aiExpanded()">
+      <ul>
+        <li *ngFor="let s of analysis()!.aiSuggestions"><strong>{{ s.question }}</strong><span *ngIf="s.rationale"> — {{ s.rationale }}</span></li>
+      </ul>
+    </div>
+  </section>
+</div>
+
