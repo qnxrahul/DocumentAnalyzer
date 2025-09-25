@@ -12,5 +12,13 @@ export class StateService {
   patchState(patch: any) {
     return this.http.post<{ ok: boolean; state: any }>(`/api/state/patch`, { patch });
   }
+
+  computeMetrics(periods?: any[]) {
+    return this.http.post<{ financialMetrics: any }>(`/api/tools/metrics`, periods ? { periods } : {});
+  }
+
+  computeAnomalies(periods?: any[]) {
+    return this.http.post<{ anomalies: any }>(`/api/tools/anomalies`, periods ? { periods } : {});
+  }
 }
 

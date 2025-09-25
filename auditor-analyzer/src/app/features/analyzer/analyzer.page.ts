@@ -60,6 +60,8 @@ export class AnalyzerPage {
       const rows = await this.parsingService.parseCsv(text);
       this.periods.set(rows);
       this.stateService.patchState({ periods: rows }).subscribe();
+      this.stateService.computeMetrics(rows).subscribe();
+      this.stateService.computeAnomalies(rows).subscribe();
     } finally {
       this.isLoadingParse.set(false);
     }
@@ -97,6 +99,8 @@ export class AnalyzerPage {
         const rows = await this.parsingService.parseXlsx(arrayBuffer);
         this.periods.set(rows);
         this.stateService.patchState({ periods: rows }).subscribe();
+        this.stateService.computeMetrics(rows).subscribe();
+        this.stateService.computeAnomalies(rows).subscribe();
       } finally {
         this.isLoadingParse.set(false);
       }
