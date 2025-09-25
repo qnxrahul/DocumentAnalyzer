@@ -3,7 +3,19 @@
 
   <section id="upload">
     <h3>Upload / Paste Data</h3>
-    <textarea rows="10" (input)="onCsvTextChange(($any($event.target)?.value) ?? '')" placeholder="Paste CSV with columns like: period,revenue,netIncome,assets,liabilities..."></textarea>
+    <div style="display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap;">
+      <div style="flex:1; min-width:280px;">
+        <label><strong>Paste CSV</strong></label>
+        <textarea rows="10" (input)="onCsvTextChange(($any($event.target)?.value) ?? '')" placeholder="period,revenue,netIncome,assets,liabilities...\n2024-Q1,120000,15000,500000,300000"></textarea>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:0.5rem; min-width:240px;">
+        <label><strong>Upload file</strong></label>
+        <input type="file" (change)="onFileSelected($event)" accept=".csv,.xlsx,.xls,.pdf" />
+        <label><strong>Paste raw text</strong></label>
+        <textarea rows="5" (input)="onRawTextChange(($any($event.target)?.value) ?? '')" placeholder="Paste text from audit report, financial statements, or tax filings..."></textarea>
+        <button type="button" (click)="classifyAndAnalyzeRawText()">Classify & Analyze Text</button>
+      </div>
+    </div>
   </section>
 
   <section id="exec">
