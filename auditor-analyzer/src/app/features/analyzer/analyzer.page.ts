@@ -1,4 +1,4 @@
-import { Component, effect, signal } from '@angular/core';
+import { Component, effect, ElementRef, signal, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgCharts } from 'ag-charts-angular';
@@ -30,6 +30,8 @@ export class AnalyzerPage {
   readonly linksExpanded = signal(true);
   readonly aiExpanded = signal(true);
   readonly aiMessages = signal<string[]>([]);
+  readonly isLoadingParse = signal(false);
+  readonly isLoadingAi = signal(false);
 
   chartOptions = signal<any>({ data: [], series: [{ type: 'line', xKey: 'periodLabel', yKey: 'revenue' }] });
   rawText = signal<string>('');
@@ -51,23 +53,32 @@ export class AnalyzerPage {
   }
 
   async onCsvTextChange(text: string): Promise<void> {
-    const rows = await this.parsingService.parseCsv(text);
-    this.periods.set(rows);
+    this.isLoadingParse.set(true);
+    try {
+      const rows = await this.parsingService.parseCsv(text);
+      this.periods.set(rows);
+    } finally {
+      this.isLoadingParse.set(false);
+    }
     // Kick off a backend suggestion call using latest context
     const messages = [
       { role: 'user', content: 'Analyze financial CSV just uploaded' },
       { role: 'context', content: JSON.stringify({ context: this.context.state }) }
     ];
+    this.isLoadingAi.set(true);
     this.ai.analyze(messages).subscribe({
       next: (res) => {
         const texts = res.newMessages?.map(m => m.content) ?? [];
         this.aiMessages.set(texts);
+        this.renderAdaptiveCards(texts);
+        this.isLoadingAi.set(false);
       },
-      error: () => {}
+      error: () => { this.isLoadingAi.set(false); }
     });
   }
 
   async onFileSelected(event: Event): Promise<void> {
+    this.isLoadingParse.set(true);
     const input = event.target as HTMLInputElement | null;
     if (!input?.files?.length) return;
     const file = input.files[0];
@@ -75,19 +86,29 @@ export class AnalyzerPage {
     if (file.name.endsWith('.csv')) {
       const text = new TextDecoder().decode(arrayBuffer);
       await this.onCsvTextChange(text);
+      this.isLoadingParse.set(false);
       return;
     }
     if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-      const rows = await this.parsingService.parseXlsx(arrayBuffer);
-      this.periods.set(rows);
+      try {
+        const rows = await this.parsingService.parseXlsx(arrayBuffer);
+        this.periods.set(rows);
+      } finally {
+        this.isLoadingParse.set(false);
+      }
       return;
     }
     if (file.name.endsWith('.pdf')) {
-      const text = await this.textExtraction.extractPdfText(arrayBuffer);
-      this.rawText.set(text);
-      await this.classifyAndAnalyzeRawText();
+      try {
+        const text = await this.textExtraction.extractPdfText(arrayBuffer);
+        this.rawText.set(text);
+        await this.classifyAndAnalyzeRawText();
+      } finally {
+        this.isLoadingParse.set(false);
+      }
       return;
     }
+    this.isLoadingParse.set(false);
   }
 
   onRawTextChange(text: string): void {
@@ -106,13 +127,45 @@ export class AnalyzerPage {
       { role: 'context', content: JSON.stringify({ docType }) },
       { role: 'user', content: text.slice(0, 8000) }
     ];
+    this.isLoadingAi.set(true);
     this.ai.analyze(messages).subscribe({
       next: (res) => {
         const texts = res.newMessages?.map(m => m.content) ?? [];
         this.aiMessages.set(texts);
+        this.renderAdaptiveCards(texts);
+        this.isLoadingAi.set(false);
       },
-      error: () => {}
+      error: () => { this.isLoadingAi.set(false); }
     });
+  }
+
+  @ViewChild('acContainer', { static: false }) acContainer?: ElementRef<HTMLDivElement>;
+  private renderAdaptiveCards(texts: string[]): void {
+    if (!this.acContainer) return;
+    const container = this.acContainer.nativeElement;
+    container.innerHTML = '';
+    // Try to parse the first message as JSON summary, otherwise show plain text
+    let json: any = null;
+    try { json = JSON.parse(texts[0] ?? ''); } catch {}
+    const { AdaptiveCard } = require('adaptivecards');
+    const { Template } = require('adaptivecards-templating');
+    const cardTemplate = new Template({
+      type: 'AdaptiveCard', version: '1.5', body: [
+        { type: 'TextBlock', text: 'AI Summary', weight: 'Bolder', size: 'Medium' },
+        { type: 'TextBlock', wrap: true, text: json ? '' : (texts.join('\n\n').slice(0, 4000)) },
+        { type: 'FactSet', facts: [
+          { title: 'Purpose', value: '${executiveSummary.purpose}' },
+          { title: 'Period', value: '${executiveSummary.reportingPeriod}' },
+          { title: 'Revenue', value: '${executiveSummary.keyHighlights.revenue}' },
+          { title: 'Net Income', value: '${executiveSummary.keyHighlights.netIncome}' }
+        ]}
+      ] });
+    const data = json ?? {};
+    const cardJson = cardTemplate.expand({ $root: data });
+    const card = new AdaptiveCard();
+    card.parse(cardJson);
+    const rendered = card.render();
+    container.appendChild(rendered);
   }
 }
 

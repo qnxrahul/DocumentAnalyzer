@@ -1,25 +1,27 @@
-<div class="container">
+<div class="container mt-3">
   <h2>Document Analyzer for Auditors</h2>
 
-  <section id="upload">
-    <h3>Upload / Paste Data</h3>
+  <section id="upload" class="card p-3 mb-3">
+    <h3 class="h5">Upload / Paste Data</h3>
     <div style="display:flex; gap:1rem; align-items:flex-start; flex-wrap:wrap;">
       <div style="flex:1; min-width:280px;">
         <label><strong>Paste CSV</strong></label>
-        <textarea rows="10" (input)="onCsvTextChange(($any($event.target)?.value) ?? '')" placeholder="period,revenue,netIncome,assets,liabilities...\n2024-Q1,120000,15000,500000,300000"></textarea>
+        <textarea class="form-control" rows="10" (input)="onCsvTextChange(($any($event.target)?.value) ?? '')" placeholder="period,revenue,netIncome,assets,liabilities...\n2024-Q1,120000,15000,500000,300000"></textarea>
+        <div class="mt-2" *ngIf="isLoadingParse()"><div class="spinner-border spinner-border-sm" role="status"></div> Parsing...</div>
       </div>
       <div style="display:flex; flex-direction:column; gap:0.5rem; min-width:240px;">
         <label><strong>Upload file</strong></label>
-        <input type="file" (change)="onFileSelected($event)" accept=".csv,.xlsx,.xls,.pdf" />
+        <input type="file" class="form-control" (change)="onFileSelected($event)" accept=".csv,.xlsx,.xls,.pdf" />
         <label><strong>Paste raw text</strong></label>
-        <textarea rows="5" (input)="onRawTextChange(($any($event.target)?.value) ?? '')" placeholder="Paste text from audit report, financial statements, or tax filings..."></textarea>
-        <button type="button" (click)="classifyAndAnalyzeRawText()">Classify & Analyze Text</button>
+        <textarea class="form-control" rows="5" (input)="onRawTextChange(($any($event.target)?.value) ?? '')" placeholder="Paste text from audit report, financial statements, or tax filings..."></textarea>
+        <button type="button" class="btn btn-primary" (click)="classifyAndAnalyzeRawText()" [disabled]="isLoadingAi()">Classify & Analyze Text</button>
+        <div class="mt-2" *ngIf="isLoadingAi()"><div class="spinner-border spinner-border-sm" role="status"></div> Analyzing...</div>
       </div>
     </div>
   </section>
 
-  <section id="exec">
-    <h3 (click)="execExpanded.set(!execExpanded())">1. Executive Summary</h3>
+  <section id="exec" class="card p-3 mb-3">
+    <h3 class="h5" (click)="execExpanded.set(!execExpanded())">1. Executive Summary</h3>
     <div *ngIf="analysis()?.executiveSummary && execExpanded() as exec">
       <p><strong>Purpose:</strong> {{ analysis()!.executiveSummary.purpose }}</p>
       <p><strong>Reporting period:</strong> {{ analysis()!.executiveSummary.reportingPeriod }}</p>
@@ -30,8 +32,8 @@
     </div>
   </section>
 
-  <section id="metrics">
-    <h3 (click)="metricsExpanded.set(!metricsExpanded())">2. Financial Metrics & Ratios</h3>
+  <section id="metrics" class="card p-3 mb-3">
+    <h3 class="h5" (click)="metricsExpanded.set(!metricsExpanded())">2. Financial Metrics & Ratios</h3>
     <div *ngIf="analysis() && metricsExpanded()">
       <ul>
         <li><strong>Gross margin:</strong> {{ (analysis()!.financialMetrics.profitability.grossMargin ?? 0) | number:'1.2-2' }}</li>
@@ -47,8 +49,8 @@
     </div>
   </section>
 
-  <section id="risk">
-    <h3 (click)="riskExpanded.set(!riskExpanded())">3. Compliance & Risk Indicators</h3>
+  <section id="risk" class="card p-3 mb-3">
+    <h3 class="h5" (click)="riskExpanded.set(!riskExpanded())">3. Compliance & Risk Indicators</h3>
     <div *ngIf="analysis() && riskExpanded()">
       <p><strong>Missing/Inconsistent:</strong></p>
       <ul>
@@ -69,15 +71,15 @@
     </div>
   </section>
 
-  <section id="trends">
-    <h3 (click)="trendsExpanded.set(!trendsExpanded())">4. Trend Analysis</h3>
+  <section id="trends" class="card p-3 mb-3">
+    <h3 class="h5" (click)="trendsExpanded.set(!trendsExpanded())">4. Trend Analysis</h3>
     <div *ngIf="trendsExpanded()">
       <ag-charts [options]="chartOptions()"></ag-charts>
     </div>
   </section>
 
-  <section id="anomalies">
-    <h3 (click)="anomaliesExpanded.set(!anomaliesExpanded())">5. Anomaly Detection</h3>
+  <section id="anomalies" class="card p-3 mb-3">
+    <h3 class="h5" (click)="anomaliesExpanded.set(!anomaliesExpanded())">5. Anomaly Detection</h3>
     <div *ngIf="analysis() && anomaliesExpanded()">
       <ul>
         <li *ngFor="let n of analysis()!.anomalies.notes">{{ n }}</li>
@@ -85,8 +87,8 @@
     </div>
   </section>
 
-  <section id="structure">
-    <h3 (click)="structureExpanded.set(!structureExpanded())">6. Document Structure Insights</h3>
+  <section id="structure" class="card p-3 mb-3">
+    <h3 class="h5" (click)="structureExpanded.set(!structureExpanded())">6. Document Structure Insights</h3>
     <div *ngIf="analysis() && structureExpanded()">
       <ul>
         <li *ngFor="let t of analysis()!.structure.tableOfContents">
@@ -97,8 +99,8 @@
     </div>
   </section>
 
-  <section id="highlights">
-    <h3 (click)="highlightsExpanded.set(!highlightsExpanded())">7. Audit-Relevant Highlights</h3>
+  <section id="highlights" class="card p-3 mb-3">
+    <h3 class="h5" (click)="highlightsExpanded.set(!highlightsExpanded())">7. Audit-Relevant Highlights</h3>
     <div *ngIf="analysis() && highlightsExpanded()">
       <p><strong>Judgment areas:</strong></p>
       <ul><li *ngFor="let x of analysis()!.auditHighlights.areasRequiringJudgment">{{ x }}</li></ul>
@@ -110,8 +112,8 @@
     </div>
   </section>
 
-  <section id="links">
-    <h3 (click)="linksExpanded.set(!linksExpanded())">8. Supporting Document Links</h3>
+  <section id="links" class="card p-3 mb-3">
+    <h3 class="h5" (click)="linksExpanded.set(!linksExpanded())">8. Supporting Document Links</h3>
     <div *ngIf="analysis() && linksExpanded()">
       <ul>
         <li *ngFor="let l of analysis()!.supportingLinks"><a [href]="l.href" target="_blank" rel="noopener">{{ l.description || l.href }}</a></li>
@@ -119,15 +121,15 @@
     </div>
   </section>
 
-  <section id="ai">
-    <h3 (click)="aiExpanded.set(!aiExpanded())">AI-Powered Suggestions</h3>
+  <section id="ai" class="card p-3 mb-3">
+    <h3 class="h5" (click)="aiExpanded.set(!aiExpanded())">AI-Powered Suggestions</h3>
     <div *ngIf="analysis() && aiExpanded()">
       <ul>
         <li *ngFor="let s of analysis()!.aiSuggestions"><strong>{{ s.question }}</strong><span *ngIf="s.rationale"> — {{ s.rationale }}</span></li>
       </ul>
       <div *ngIf="aiMessages().length">
-        <h4>Agent Responses</h4>
-        <pre>{{ aiMessages().join('\n\n') }}</pre>
+        <h4 class="h6">Agent Responses</h4>
+        <div #acContainer></div>
       </div>
     </div>
   </section>
