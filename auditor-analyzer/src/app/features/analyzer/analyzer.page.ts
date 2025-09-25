@@ -9,6 +9,7 @@ import { DocumentAnalysis, PeriodDatum } from '../../constants';
 import { AiSuggestionsService } from '../../services/ai-suggestions.service';
 import { TextExtractionService } from '../../services/text-extraction.service';
 import { DocumentClassifierService, DocumentType } from '../../services/document-classifier.service';
+import { StateService } from '../../services/state.service';
 
 @Component({
   selector: 'app-analyzer-page',
@@ -43,7 +44,8 @@ export class AnalyzerPage {
     public readonly context: ContextService,
     private readonly ai: AiSuggestionsService,
     private readonly textExtraction: TextExtractionService,
-    private readonly classifier: DocumentClassifierService
+    private readonly classifier: DocumentClassifierService,
+    private readonly stateService: StateService
   ) {
     effect(() => {
       const rows = this.periods();
@@ -57,6 +59,7 @@ export class AnalyzerPage {
     try {
       const rows = await this.parsingService.parseCsv(text);
       this.periods.set(rows);
+      this.stateService.patchState({ periods: rows }).subscribe();
     } finally {
       this.isLoadingParse.set(false);
     }
@@ -93,6 +96,7 @@ export class AnalyzerPage {
       try {
         const rows = await this.parsingService.parseXlsx(arrayBuffer);
         this.periods.set(rows);
+        this.stateService.patchState({ periods: rows }).subscribe();
       } finally {
         this.isLoadingParse.set(false);
       }

@@ -8,6 +8,49 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
+// Multi-tenant state store and helpers
+const stateStore = new Map();
+function getTenantId(req) { return (req.headers['x-tenant-id'] || 'public').toString(); }
+function getSessionId(req) { return (req.headers['x-session-id'] || '').toString(); }
+function getState(tenantId, sessionId) {
+  const key = `${tenantId}:${sessionId}`;
+  if (!stateStore.has(key)) stateStore.set(key, { createdAt: dayjs().toISOString(), tokensUsed: 0, tokensBudget: 100000 });
+  return stateStore.get(key);
+}
+function deepMerge(target, source) {
+  if (!source || typeof source !== 'object') return target;
+  for (const k of Object.keys(source)) {
+    const sv = source[k];
+    if (sv && typeof sv === 'object' && !Array.isArray(sv)) {
+      if (typeof target[k] !== 'object' || Array.isArray(target[k]) || target[k] === null) target[k] = {};
+      deepMerge(target[k], sv);
+    } else {
+      target[k] = sv;
+    }
+  }
+  return target;
+}
+
+app.get('/api/state', (req, res) => {
+  const tenantId = getTenantId(req);
+  const sessionId = getSessionId(req);
+  if (!sessionId) return res.status(400).json({ error: 'Missing X-Session-Id' });
+  const state = getState(tenantId, sessionId);
+  res.json({ state, tenantId, sessionId });
+});
+
+app.post('/api/state/patch', (req, res) => {
+  const tenantId = getTenantId(req);
+  const sessionId = getSessionId(req);
+  if (!sessionId) return res.status(400).json({ error: 'Missing X-Session-Id' });
+  const patch = req.body?.patch || {};
+  const state = getState(tenantId, sessionId);
+  deepMerge(state, patch);
+  state.updatedAt = dayjs().toISOString();
+  stateStore.set(`${tenantId}:${sessionId}`, state);
+  res.json({ ok: true, state });
+});
+
 const AgentRequestSchema = z.object({
   messages: z.array(
     z.object({ role: z.enum(['user','system','assistant','context']), content: z.string() })
@@ -17,7 +60,9 @@ const AgentRequestSchema = z.object({
 app.post('/api/agent', async (req, res) => {
   try {
     const bearer = (req.headers['authorization'] || '').toString();
-    const sessionId = (req.headers['x-session-id'] || '').toString();
+    const sessionId = getSessionId(req);
+    const tenantId = getTenantId(req);
+    if (!sessionId) return res.status(400).json({ error: 'Missing X-Session-Id' });
     const parsed = AgentRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid payload', issues: parsed.error.issues });
@@ -42,6 +87,14 @@ app.post('/api/agent', async (req, res) => {
     }
     const contextJson = contextBlobs.join('\n');
     const userText = userBlobs.join('\n');
+
+    const state = getState(tenantId, sessionId);
+    const compactState = {
+      executiveSummary: state.executiveSummary,
+      financialMetrics: state.financialMetrics,
+      anomalies: state.anomalies,
+      periods: Array.isArray(state.periods) ? state.periods.slice(-4) : undefined
+    };
 
     const systemPrompt = [
       'You are an auditing AI assistant for Big Four-grade reviews.',
@@ -89,8 +142,9 @@ app.post('/api/agent', async (req, res) => {
         model: OPENROUTER_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
-          contextJson ? { role: 'user', content: `Context:\n${contextJson}` } : null,
-          { role: 'user', content: userText.slice(0, 12000) }
+          Object.keys(compactState).length ? { role: 'user', content: `State:\n${JSON.stringify(compactState).slice(0, 6000)}` } : null,
+          contextJson ? { role: 'user', content: `Context:\n${contextJson.slice(0, 4000)}` } : null,
+          userText ? { role: 'user', content: userText.slice(0, 4000) } : null
         ].filter(Boolean),
         temperature: 0.2,
         max_tokens: 1800
@@ -113,13 +167,15 @@ app.post('/api/agent', async (req, res) => {
       const data = await resp.json();
       assistantContent = data?.choices?.[0]?.message?.content || '';
       if (!assistantContent) assistantContent = 'No content returned by model.';
+      const estimatedPromptTokens = Math.ceil((JSON.stringify(body).length) / 4);
+      state.tokensUsed = (state.tokensUsed || 0) + estimatedPromptTokens;
     }
 
     const response = {
       newMessages: [
         { role: 'assistant', content: assistantContent }
       ],
-      meta: { sessionId, authorized: !!bearer, model: OPENROUTER_MODEL, ts: dayjs().toISOString() }
+      meta: { sessionId, tenantId, authorized: !!bearer, model: OPENROUTER_MODEL, ts: dayjs().toISOString() }
     };
     res.json(response);
   } catch (e) {

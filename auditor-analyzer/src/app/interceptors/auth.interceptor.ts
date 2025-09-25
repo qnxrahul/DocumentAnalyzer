@@ -8,7 +8,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const sessionId = tokenService.getSessionId();
 
   const setHeaders: Record<string, string> = {
-    'X-Session-Id': sessionId
+    'X-Session-Id': sessionId,
+    'X-Tenant-Id': localStorage.getItem('TENANT_ID') || 'public'
   };
   if (token) setHeaders['Authorization'] = `Bearer ${token}`;
 
