@@ -6,6 +6,7 @@ import { AnalysisService } from '../../services/analysis.service';
 import { ParsingService } from '../../services/parsing.service';
 import { ContextService } from '../../services/context.service';
 import { DocumentAnalysis, PeriodDatum } from '../../constants';
+import { AiSuggestionsService } from '../../services/ai-suggestions.service';
 
 @Component({
   selector: 'app-analyzer-page',
@@ -32,7 +33,8 @@ export class AnalyzerPage {
   constructor(
     private readonly analysisService: AnalysisService,
     private readonly parsingService: ParsingService,
-    public readonly context: ContextService
+    public readonly context: ContextService,
+    private readonly ai: AiSuggestionsService
   ) {
     effect(() => {
       const rows = this.periods();
@@ -44,6 +46,15 @@ export class AnalyzerPage {
   async onCsvTextChange(text: string): Promise<void> {
     const rows = await this.parsingService.parseCsv(text);
     this.periods.set(rows);
+    // Kick off a backend suggestion call using latest context
+    const messages = [
+      { role: 'user', content: 'Analyze financial CSV just uploaded' },
+      { role: 'context', content: JSON.stringify({ context: this.context.state }) }
+    ];
+    this.ai.analyze(messages).subscribe({
+      next: () => {},
+      error: () => {}
+    });
   }
 }
 

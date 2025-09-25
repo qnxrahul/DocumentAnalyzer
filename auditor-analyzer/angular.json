@@ -67,7 +67,8 @@
               "buildTarget": "auditor-analyzer:build:production"
             },
             "development": {
-              "buildTarget": "auditor-analyzer:build:development"
+              "buildTarget": "auditor-analyzer:build:development",
+              "proxyConfig": "proxy.conf.json"
             }
           },
           "defaultConfiguration": "development"
