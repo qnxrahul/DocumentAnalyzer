@@ -13,6 +13,8 @@ const AgentRequestSchema = z.object({
 });
 
 app.post('/api/agent', (req, res) => {
+  const bearer = (req.headers['authorization'] || '').toString();
+  const sessionId = (req.headers['x-session-id'] || '').toString();
   const parsed = AgentRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid payload', issues: parsed.error.issues });
@@ -25,7 +27,8 @@ app.post('/api/agent', (req, res) => {
     newMessages: [
       { role: 'assistant', content: 'Agent received ' + messages.length + ' messages.' },
       { role: 'assistant', content: 'Preview:\n' + userText.slice(0, 500) }
-    ]
+    ],
+    meta: { sessionId, authorized: !!bearer }
   };
   res.json(response);
 });

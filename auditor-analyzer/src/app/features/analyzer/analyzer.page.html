@@ -113,6 +113,10 @@
       <ul>
         <li *ngFor="let s of analysis()!.aiSuggestions"><strong>{{ s.question }}</strong><span *ngIf="s.rationale"> — {{ s.rationale }}</span></li>
       </ul>
+      <div *ngIf="aiMessages().length">
+        <h4>Agent Responses</h4>
+        <pre>{{ aiMessages().join('\n\n') }}</pre>
+      </div>
     </div>
   </section>
 </div>

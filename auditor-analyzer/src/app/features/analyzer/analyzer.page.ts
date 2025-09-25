@@ -27,6 +27,7 @@ export class AnalyzerPage {
   readonly highlightsExpanded = signal(true);
   readonly linksExpanded = signal(true);
   readonly aiExpanded = signal(true);
+  readonly aiMessages = signal<string[]>([]);
 
   chartOptions = signal<any>({ data: [], series: [{ type: 'line', xKey: 'periodLabel', yKey: 'revenue' }] });
 
@@ -52,7 +53,10 @@ export class AnalyzerPage {
       { role: 'context', content: JSON.stringify({ context: this.context.state }) }
     ];
     this.ai.analyze(messages).subscribe({
-      next: () => {},
+      next: (res) => {
+        const texts = res.newMessages?.map(m => m.content) ?? [];
+        this.aiMessages.set(texts);
+      },
       error: () => {}
     });
   }
