@@ -33,6 +33,10 @@ export interface DocumentAnalysis {
   auditHighlights: AuditHighlights;
   supportingLinks: SupportingLink[];
   aiSuggestions: AiSuggestion[];
+  aiQuestions?: string[];
+  deeperInvestigations?: string[];
+  risks?: string[];
+  opportunities?: string[];
 }
 
 export interface ExecutiveSummary {

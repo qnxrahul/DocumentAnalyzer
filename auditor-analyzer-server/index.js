@@ -56,7 +56,8 @@ app.post('/api/agent', async (req, res) => {
       '  structure: { tableOfContents: { title: string, anchor?: string }[], keyTablesAndFigures: string[], glossary: string[], entityRelationships: string[] },',
       '  auditHighlights: { areasRequiringJudgment: string[], estimatesAndAssumptions: string[], internalControlDisclosures: string[], auditorsOpinion?: string },',
       '  supportingLinks: { href: string, description?: string }[],',
-      '  aiSuggestions: { question: string, rationale?: string }[] }',
+      '  aiSuggestions: { question: string, rationale?: string }[],',
+      '  aiQuestions?: string[], deeperInvestigations?: string[], risks?: string[], opportunities?: string[] }',
       'Ensure numbers are numeric, not strings. If data is insufficient, leave fields undefined or empty arrays.'
     ].join('\n');
 
@@ -77,7 +78,11 @@ app.post('/api/agent', async (req, res) => {
         structure: { tableOfContents: [], keyTablesAndFigures: [], glossary: [], entityRelationships: [] },
         auditHighlights: { areasRequiringJudgment: [], estimatesAndAssumptions: [], internalControlDisclosures: [] },
         supportingLinks: [],
-        aiSuggestions: [{ question: 'Set OPENROUTER_API_KEY to enable AI extraction.' }]
+        aiSuggestions: [{ question: 'Set OPENROUTER_API_KEY to enable AI extraction.' }],
+        aiQuestions: ['What drives the revenue change?'],
+        deeperInvestigations: ['Validate revenue recognition cutoff for Q4'],
+        risks: ['High leverage may pressure covenants'],
+        opportunities: ['Working capital optimization via receivables']
       }, null, 2);
     } else {
       const body = {

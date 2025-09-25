@@ -127,6 +127,31 @@
       <ul>
         <li *ngFor="let s of analysis()!.aiSuggestions"><strong>{{ s.question }}</strong><span *ngIf="s.rationale"> — {{ s.rationale }}</span></li>
       </ul>
+      <div class="row">
+        <div class="col-md-4">
+          <h4 class="h6">Questions to Ask</h4>
+          <ul>
+            <li *ngFor="let q of (analysis()!.aiQuestions || [])">{{ q }}</li>
+          </ul>
+        </div>
+        <div class="col-md-4">
+          <h4 class="h6">Deeper Investigation</h4>
+          <ul>
+            <li *ngFor="let d of (analysis()!.deeperInvestigations || [])">{{ d }}</li>
+          </ul>
+        </div>
+        <div class="col-md-4">
+          <h4 class="h6">Risks & Opportunities</h4>
+          <div class="d-flex gap-4">
+            <ul class="mb-0">
+              <li *ngFor="let r of (analysis()!.risks || [])">Risk: {{ r }}</li>
+            </ul>
+            <ul class="mb-0">
+              <li *ngFor="let o of (analysis()!.opportunities || [])">Opportunity: {{ o }}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
       <div *ngIf="aiMessages().length">
         <h4 class="h6">Agent Responses</h4>
         <div #acContainer></div>
