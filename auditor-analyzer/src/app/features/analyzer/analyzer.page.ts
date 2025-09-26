@@ -5,7 +5,7 @@ import { AgCharts } from 'ag-charts-angular';
 import { AnalysisService } from '../../services/analysis.service';
 import { ParsingService } from '../../services/parsing.service';
 import { ContextService } from '../../services/context.service';
-import { AgentMessage, DocumentAnalysis, PeriodDatum } from '../../constants';
+import { ActionItem, AgentMessage, DocumentAnalysis, PeriodDatum } from '../../constants';
 import { AiSuggestionsService } from '../../services/ai-suggestions.service';
 import { TextExtractionService } from '../../services/text-extraction.service';
 import { DocumentClassifierService, DocumentType } from '../../services/document-classifier.service';
@@ -33,6 +33,7 @@ export class AnalyzerPage {
   readonly aiMessages = signal<string[]>([]);
   readonly isLoadingParse = signal(false);
   readonly isLoadingAi = signal(false);
+  readonly actionItems = signal<ActionItem[]>([]);
 
   chartOptions = signal<any>({ data: [], series: [{ type: 'line', xKey: 'periodLabel', yKey: 'revenue' }] });
   rawText = signal<string>('');
@@ -51,6 +52,11 @@ export class AnalyzerPage {
       const rows = this.periods();
       this.analysis.set(rows.length ? this.analysisService.buildAnalysis(rows) : null);
       this.chartOptions.update((opts: any) => ({ ...opts, data: rows }));
+    });
+    // Load persisted action items on init
+    this.stateService.getState().subscribe((resp) => {
+      const items = (resp?.state?.actionItems as ActionItem[]) || [];
+      this.actionItems.set(items);
     });
   }
 
@@ -80,6 +86,35 @@ export class AnalyzerPage {
       },
       error: () => { this.isLoadingAi.set(false); }
     });
+  }
+
+  // Action items handlers
+  addActionItem(): void {
+    const newItem: ActionItem = {
+      id: crypto.randomUUID(),
+      title: 'New action item',
+      priority: 'Medium',
+      completed: false
+    };
+    const next = [...this.actionItems(), newItem];
+    this.actionItems.set(next);
+    this.persistActionItems(next);
+  }
+
+  updateActionItem(id: string, patch: Partial<ActionItem>): void {
+    const next = this.actionItems().map((it) => it.id === id ? { ...it, ...patch } : it);
+    this.actionItems.set(next);
+    this.persistActionItems(next);
+  }
+
+  removeActionItem(id: string): void {
+    const next = this.actionItems().filter((it) => it.id !== id);
+    this.actionItems.set(next);
+    this.persistActionItems(next);
+  }
+
+  private persistActionItems(items: ActionItem[]): void {
+    this.stateService.patchState({ actionItems: items }).subscribe();
   }
 
   async onFileSelected(event: Event): Promise<void> {
