@@ -21,7 +21,15 @@ export class TextExtractionService {
 
     // OCR fallback for image-based PDFs
     try {
-      const { createWorker } = await import('tesseract.js');
+      // Prefer ESM build for bundlers; use runtime resolution to avoid pre-bundle issues
+      let createWorker: any;
+      try {
+        const mod: any = await import(/* @vite-ignore */ 'tesseract.js/dist/tesseract.esm.min.js');
+        createWorker = mod.createWorker;
+      } catch {
+        const mod: any = await import(/* @vite-ignore */ 'tesseract.js');
+        createWorker = mod.createWorker;
+      }
       // Render each page to canvas and OCR
       let ocrText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
