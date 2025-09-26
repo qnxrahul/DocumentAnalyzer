@@ -52,6 +52,10 @@ export class AnalyzerPage {
       const rows = this.periods();
       this.analysis.set(rows.length ? this.analysisService.buildAnalysis(rows) : null);
       this.chartOptions.update((opts: any) => ({ ...opts, data: rows }));
+      const a = this.analysis();
+      if (a) {
+        this.deriveAndMergeActionItems(a);
+      }
     });
     // Load persisted action items on init
     this.stateService.getState().subscribe((resp) => {
@@ -93,6 +97,7 @@ export class AnalyzerPage {
     const newItem: ActionItem = {
       id: crypto.randomUUID(),
       title: 'New action item',
+      owner: 'Auditor',
       priority: 'Medium',
       completed: false
     };
@@ -115,6 +120,46 @@ export class AnalyzerPage {
 
   private persistActionItems(items: ActionItem[]): void {
     this.stateService.patchState({ actionItems: items }).subscribe();
+  }
+
+  private deriveAndMergeActionItems(analysis: DocumentAnalysis): void {
+    const derived: ActionItem[] = [];
+    const pushUnique = (title: string, priority: ActionItem['priority'] = 'Medium') => {
+      const exists = this.actionItems().some(it => it.title.trim().toLowerCase() === title.trim().toLowerCase());
+      if (!exists) {
+        derived.push({ id: crypto.randomUUID(), title, owner: 'Auditor', priority, completed: false });
+      }
+    };
+    // Compliance/risk -> High priority actions
+    for (const m of (analysis.complianceAndRisk?.missingOrInconsistent || [])) {
+      pushUnique(`Resolve: ${m}`, 'High');
+    }
+    for (const u of (analysis.complianceAndRisk?.unusualTransactions || [])) {
+      pushUnique(`Investigate unusual transaction: ${u}`, 'High');
+    }
+    for (const n of (analysis.complianceAndRisk?.nonComplianceNotes || [])) {
+      pushUnique(`Address non-compliance: ${n}`, 'High');
+    }
+    // Anomalies -> High priority investigations
+    for (const n of (analysis.anomalies?.notes || [])) {
+      pushUnique(`Investigate anomaly: ${n}`, 'High');
+    }
+    // AI suggestions -> Follow-ups
+    for (const s of (analysis.aiSuggestions || [])) {
+      pushUnique(`Follow up: ${s.question}`, 'Medium');
+    }
+    // Risks/Opportunities -> Tasks
+    for (const r of (analysis.risks || [])) {
+      pushUnique(`Mitigate risk: ${r}`, 'High');
+    }
+    for (const o of (analysis.opportunities || [])) {
+      pushUnique(`Explore opportunity: ${o}`, 'Low');
+    }
+    if (derived.length) {
+      const next = [...this.actionItems(), ...derived];
+      this.actionItems.set(next);
+      this.persistActionItems(next);
+    }
   }
 
   async onFileSelected(event: Event): Promise<void> {
