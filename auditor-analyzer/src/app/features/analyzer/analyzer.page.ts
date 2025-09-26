@@ -221,10 +221,16 @@ export class AnalyzerPage {
     this.classifiedAs.set(docType);
     this.context.update({ documentPurpose: docType });
     // Send to agent for deeper parsing/LLM-based extraction (stubbed)
+    const chunks: string[] = [];
+    const maxChunks = 6;
+    const chunkSize = 6000;
+    for (let i = 0; i < Math.min(text.length, maxChunks * chunkSize); i += chunkSize) {
+      chunks.push(text.slice(i, i + chunkSize));
+    }
     const messages: AgentMessage[] = [
       { role: 'system', content: 'You are an assistant that extracts financial metrics and audit highlights from complex documents.' },
       { role: 'context', content: JSON.stringify({ docType }) },
-      { role: 'user', content: text.slice(0, 8000) }
+      ...chunks.map((c) => ({ role: 'user', content: c }))
     ];
     this.isLoadingAi.set(true);
     this.ai.analyze(messages).subscribe({
