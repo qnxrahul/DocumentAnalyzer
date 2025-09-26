@@ -6,7 +6,7 @@ export class TextExtractionService {
     const pdfjsLib = await import('pdfjs-dist');
     // @ts-ignore worker entry hint for bundler
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (pdfjsLib as any).GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.js?url')).default;
+    (pdfjsLib as any).GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
     const pdf = await loadingTask.promise;
     let out = '';
