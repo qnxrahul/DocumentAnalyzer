@@ -1,0 +1,22 @@
+.container {
+  display: block;
+  max-width: 1100px;
+  margin: 1rem auto;
+}
+
+section {
+  margin: 1rem 0;
+  border: 1px solid #ddd;
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+textarea {
+  width: 100%;
+  font-family: monospace;
+}
+
+h3 {
+  cursor: pointer;
+}
+
