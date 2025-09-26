@@ -52,6 +52,10 @@ export class AnalyzerPage {
       const rows = this.periods();
       this.analysis.set(rows.length ? this.analysisService.buildAnalysis(rows) : null);
       this.chartOptions.update((opts: any) => ({ ...opts, data: rows }));
+      const a = this.analysis();
+      if (a) {
+        this.deriveAndMergeActionItems(a);
+      }
     });
     // Load persisted action items on init
     this.stateService.getState().subscribe((resp) => {
@@ -80,9 +84,7 @@ export class AnalyzerPage {
     this.ai.analyze(messages).subscribe({
       next: (res: { newMessages: AgentMessage[] }) => {
         const texts = res.newMessages?.map((m: AgentMessage) => m.content) ?? [];
-        this.aiMessages.set(texts);
-        this.renderAdaptiveCards(texts);
-        this.isLoadingAi.set(false);
+        this.handleAiTexts(texts);
       },
       error: () => { this.isLoadingAi.set(false); }
     });
@@ -93,6 +95,7 @@ export class AnalyzerPage {
     const newItem: ActionItem = {
       id: crypto.randomUUID(),
       title: 'New action item',
+      owner: 'Auditor',
       priority: 'Medium',
       completed: false
     };
@@ -115,6 +118,46 @@ export class AnalyzerPage {
 
   private persistActionItems(items: ActionItem[]): void {
     this.stateService.patchState({ actionItems: items }).subscribe();
+  }
+
+  private deriveAndMergeActionItems(analysis: DocumentAnalysis): void {
+    const derived: ActionItem[] = [];
+    const pushUnique = (title: string, priority: ActionItem['priority'] = 'Medium') => {
+      const exists = this.actionItems().some(it => it.title.trim().toLowerCase() === title.trim().toLowerCase());
+      if (!exists) {
+        derived.push({ id: crypto.randomUUID(), title, owner: 'Auditor', priority, completed: false });
+      }
+    };
+    // Compliance/risk -> High priority actions
+    for (const m of (analysis.complianceAndRisk?.missingOrInconsistent || [])) {
+      pushUnique(`Resolve: ${m}`, 'High');
+    }
+    for (const u of (analysis.complianceAndRisk?.unusualTransactions || [])) {
+      pushUnique(`Investigate unusual transaction: ${u}`, 'High');
+    }
+    for (const n of (analysis.complianceAndRisk?.nonComplianceNotes || [])) {
+      pushUnique(`Address non-compliance: ${n}`, 'High');
+    }
+    // Anomalies -> High priority investigations
+    for (const n of (analysis.anomalies?.notes || [])) {
+      pushUnique(`Investigate anomaly: ${n}`, 'High');
+    }
+    // AI suggestions -> Follow-ups
+    for (const s of (analysis.aiSuggestions || [])) {
+      pushUnique(`Follow up: ${s.question}`, 'Medium');
+    }
+    // Risks/Opportunities -> Tasks
+    for (const r of (analysis.risks || [])) {
+      pushUnique(`Mitigate risk: ${r}`, 'High');
+    }
+    for (const o of (analysis.opportunities || [])) {
+      pushUnique(`Explore opportunity: ${o}`, 'Low');
+    }
+    if (derived.length) {
+      const next = [...this.actionItems(), ...derived];
+      this.actionItems.set(next);
+      this.persistActionItems(next);
+    }
   }
 
   async onFileSelected(event: Event): Promise<void> {
@@ -145,9 +188,7 @@ export class AnalyzerPage {
         this.ai.analyze(messages).subscribe({
           next: (res: { newMessages: AgentMessage[] }) => {
             const texts = res.newMessages?.map((m: AgentMessage) => m.content) ?? [];
-            this.aiMessages.set(texts);
-            this.renderAdaptiveCards(texts);
-            this.isLoadingAi.set(false);
+            this.handleAiTexts(texts);
           },
           error: () => { this.isLoadingAi.set(false); }
         });
@@ -189,8 +230,38 @@ export class AnalyzerPage {
     this.ai.analyze(messages).subscribe({
       next: (res: { newMessages: AgentMessage[] }) => {
         const texts = res.newMessages?.map((m: AgentMessage) => m.content) ?? [];
-        this.aiMessages.set(texts);
-        this.renderAdaptiveCards(texts);
+        this.handleAiTexts(texts);
+      },
+      error: () => { this.isLoadingAi.set(false); }
+    });
+  }
+
+  onAnalyzeUrl(url: string): void {
+    if (!url?.trim()) return;
+    this.isLoadingAi.set(true);
+    this.stateService.fetchUrl(url).subscribe({
+      next: async (resp) => {
+        if (resp.type === 'pdf' && resp.data) {
+          try {
+            const bin = Uint8Array.from(atob(resp.data), c => c.charCodeAt(0)).buffer;
+            const text = await this.textExtraction.extractPdfText(bin);
+            this.rawText.set(text);
+            await this.classifyAndAnalyzeRawText();
+          } finally {
+            // classifyAndAnalyzeRawText handles isLoadingAi flag
+          }
+          return;
+        }
+        if (resp.type === 'text' && resp.text) {
+          const html = resp.text;
+          // Strip HTML to text
+          const div = document.createElement('div');
+          div.innerHTML = html;
+          const text = div.textContent || div.innerText || '';
+          this.rawText.set(text);
+          await this.classifyAndAnalyzeRawText();
+          return;
+        }
         this.isLoadingAi.set(false);
       },
       error: () => { this.isLoadingAi.set(false); }
@@ -285,6 +356,31 @@ export class AnalyzerPage {
     };
     const rendered = card.render();
     container.appendChild(rendered);
+  }
+
+  private handleAiTexts(texts: string[]): void {
+    this.aiMessages.set(texts);
+    this.renderAdaptiveCards(texts);
+    // Try to use AI JSON as the document analysis
+    try {
+      const maybe = JSON.parse(texts[0] ?? '');
+      if (maybe && typeof maybe === 'object') {
+        // Basic shape guard
+        if (maybe.executiveSummary && maybe.financialMetrics && maybe.complianceAndRisk) {
+          this.analysis.set(maybe as any);
+          const trendData = maybe?.trends?.periods;
+          if (Array.isArray(trendData)) {
+            this.chartOptions.update((opts: any) => ({ ...opts, data: trendData }));
+          }
+          this.stateService.patchState({ analysis: maybe }).subscribe();
+          this.deriveAndMergeActionItems(maybe as any);
+        }
+      }
+    } catch {
+      // ignore non-JSON
+    } finally {
+      this.isLoadingAi.set(false);
+    }
   }
 }
 

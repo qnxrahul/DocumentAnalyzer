@@ -51,6 +51,26 @@ app.post('/api/state/patch', (req, res) => {
   res.json({ ok: true, state });
 });
 
+// Fetch remote document (HTML or PDF) server-side to avoid CORS
+app.post('/api/fetch', async (req, res) => {
+  try {
+    const url = (req.body?.url || '').toString();
+    if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'Invalid URL' });
+    const resp = await fetch(url, { headers: { 'User-Agent': 'Auditor-Analyzer/1.0' } });
+    if (!resp.ok) return res.status(resp.status).json({ error: `Fetch failed`, status: resp.status });
+    const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('pdf') || url.toLowerCase().endsWith('.pdf')) {
+      const arr = new Uint8Array(await resp.arrayBuffer());
+      const b64 = Buffer.from(arr).toString('base64');
+      return res.json({ type: 'pdf', data: b64, contentType });
+    }
+    const text = await resp.text();
+    return res.json({ type: 'text', text, contentType });
+  } catch (e) {
+    res.status(500).json({ error: 'Fetch error', detail: String(e) });
+  }
+});
+
 const AgentRequestSchema = z.object({
   messages: z.array(
     z.object({ role: z.enum(['user','system','assistant','context']), content: z.string() })
