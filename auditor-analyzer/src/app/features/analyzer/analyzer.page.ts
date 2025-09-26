@@ -230,7 +230,7 @@ export class AnalyzerPage {
     const messages: AgentMessage[] = [
       { role: 'system', content: 'You are an assistant that extracts financial metrics and audit highlights from complex documents.' },
       { role: 'context', content: JSON.stringify({ docType }) },
-      ...chunks.map((c) => ({ role: 'user', content: c }))
+      ...chunks.map((c): AgentMessage => ({ role: 'user', content: c }))
     ];
     this.isLoadingAi.set(true);
     this.ai.analyze(messages).subscribe({

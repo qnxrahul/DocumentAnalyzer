@@ -32,7 +32,7 @@ export class TextExtractionService {
         if (!ctx) continue;
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        await page.render({ canvasContext: ctx as any, viewport }).promise;
+        await page.render({ canvasContext: ctx as any, viewport, canvas }).promise;
         const worker = await createWorker('eng');
         const { data } = await worker.recognize(canvas);
         ocrText += (data?.text || '') + '\n';
