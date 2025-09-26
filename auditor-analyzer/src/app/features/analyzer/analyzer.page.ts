@@ -5,7 +5,7 @@ import { AgCharts } from 'ag-charts-angular';
 import { AnalysisService } from '../../services/analysis.service';
 import { ParsingService } from '../../services/parsing.service';
 import { ContextService } from '../../services/context.service';
-import { DocumentAnalysis, PeriodDatum } from '../../constants';
+import { AgentMessage, DocumentAnalysis, PeriodDatum } from '../../constants';
 import { AiSuggestionsService } from '../../services/ai-suggestions.service';
 import { TextExtractionService } from '../../services/text-extraction.service';
 import { DocumentClassifierService, DocumentType } from '../../services/document-classifier.service';
@@ -66,7 +66,7 @@ export class AnalyzerPage {
       this.isLoadingParse.set(false);
     }
     // Kick off a backend suggestion call using latest context
-    const messages = [
+    const messages: AgentMessage[] = [
       { role: 'user', content: 'Analyze financial CSV just uploaded' },
       { role: 'context', content: JSON.stringify({ context: this.context.state }) }
     ];
@@ -130,7 +130,7 @@ export class AnalyzerPage {
     this.classifiedAs.set(docType);
     this.context.update({ documentPurpose: docType });
     // Send to agent for deeper parsing/LLM-based extraction (stubbed)
-    const messages = [
+    const messages: AgentMessage[] = [
       { role: 'system', content: 'You are an assistant that extracts financial metrics and audit highlights from complex documents.' },
       { role: 'context', content: JSON.stringify({ docType }) },
       { role: 'user', content: text.slice(0, 8000) }
