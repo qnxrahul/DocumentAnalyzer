@@ -176,17 +176,78 @@ export class AnalyzerPage {
       type: 'AdaptiveCard', version: '1.5', body: [
         { type: 'TextBlock', text: 'AI Summary', weight: 'Bolder', size: 'Medium' },
         { type: 'TextBlock', wrap: true, text: json ? '' : (texts.join('\n\n').slice(0, 4000)) },
-        { type: 'FactSet', facts: [
-          { title: 'Purpose', value: '${executiveSummary.purpose}' },
-          { title: 'Period', value: '${executiveSummary.reportingPeriod}' },
-          { title: 'Revenue', value: '${executiveSummary.keyHighlights.revenue}' },
-          { title: 'Net Income', value: '${executiveSummary.keyHighlights.netIncome}' }
-        ]}
-      ] });
+        { type: 'TextBlock', text: 'Executive Summary (editable)', weight: 'Bolder', spacing: 'Medium' },
+        { type: 'Input.Text', id: 'exec_purpose', placeholder: 'Purpose', value: '${executiveSummary.purpose}' },
+        { type: 'Input.Text', id: 'exec_reportingPeriod', placeholder: 'Reporting Period', value: '${executiveSummary.reportingPeriod}' },
+        { type: 'TextBlock', text: 'Key Highlights', weight: 'Bolder' },
+        { type: 'Input.Text', id: 'exec_revenue', placeholder: 'Revenue', value: '${executiveSummary.keyHighlights.revenue}' },
+        { type: 'Input.Text', id: 'exec_netIncome', placeholder: 'Net Income', value: '${executiveSummary.keyHighlights.netIncome}' },
+        { type: 'Input.Text', id: 'exec_assets', placeholder: 'Assets', value: '${executiveSummary.keyHighlights.assets}' },
+        { type: 'Input.Text', id: 'exec_liabilities', placeholder: 'Liabilities', value: '${executiveSummary.keyHighlights.liabilities}' },
+        { type: 'TextBlock', text: 'Auditor Instructions (policy / follow-up)', weight: 'Bolder', spacing: 'Medium' },
+        { type: 'Input.Text', id: 'auditor_policy', isMultiline: true, placeholder: 'Add policy constraints or follow-up questions for the AI...' }
+      ],
+      actions: [
+        { type: 'Action.Submit', title: 'Save Edits', data: { action: 'save_edits' } },
+        { type: 'Action.Submit', title: 'Ask AI with Instructions', data: { action: 'ask_ai' } }
+      ]
+    });
     const data = json ?? {};
     const cardJson = cardTemplate.expand({ $root: data });
     const card = new AdaptiveCard();
     card.parse(cardJson);
+    // Handle actions for Save and Ask AI
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (card as any).onExecuteAction = (action: any) => {
+      // Collect all inputs
+      const inputs: Record<string, any> = {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (card as any).getAllInputs().forEach((i: any) => { inputs[i.id] = i.value; });
+      const which = action?.data?.action;
+      if (which === 'save_edits') {
+        const parseNum = (v: unknown): number | undefined => {
+          if (v === null || v === undefined || String(v).trim() === '') return undefined;
+          const n = Number(String(v).replace(/[, ]+/g, ''));
+          return isNaN(n) ? undefined : n;
+        };
+        const current = this.analysis();
+        const updatedExec = {
+          purpose: inputs['exec_purpose'] ?? current?.executiveSummary?.purpose,
+          reportingPeriod: inputs['exec_reportingPeriod'] ?? current?.executiveSummary?.reportingPeriod,
+          keyHighlights: {
+            revenue: parseNum(inputs['exec_revenue']) ?? current?.executiveSummary?.keyHighlights?.revenue,
+            netIncome: parseNum(inputs['exec_netIncome']) ?? current?.executiveSummary?.keyHighlights?.netIncome,
+            assets: parseNum(inputs['exec_assets']) ?? current?.executiveSummary?.keyHighlights?.assets,
+            liabilities: parseNum(inputs['exec_liabilities']) ?? current?.executiveSummary?.keyHighlights?.liabilities
+          }
+        } as any;
+        if (current) {
+          this.analysis.set({
+            ...current,
+            executiveSummary: { ...current.executiveSummary, ...updatedExec, keyHighlights: { ...current.executiveSummary.keyHighlights, ...updatedExec.keyHighlights } }
+          });
+          this.stateService.patchState({ executiveSummary: this.analysis()!.executiveSummary }).subscribe();
+        }
+      }
+      if (which === 'ask_ai') {
+        const policy = String(inputs['auditor_policy'] || '').slice(0, 4000);
+        const messages: AgentMessage[] = [
+          { role: 'system', content: 'You are an assistant that refines prior analysis based on auditor policies/instructions. Update the JSON summary accordingly.' },
+          { role: 'context', content: JSON.stringify({ state: this.context.state, policy }).slice(0, 8000) },
+          { role: 'user', content: policy || 'Apply policy to refine the analysis.' }
+        ];
+        this.isLoadingAi.set(true);
+        this.ai.analyze(messages).subscribe({
+          next: (res: { newMessages: AgentMessage[] }) => {
+            const texts = res.newMessages?.map((m: AgentMessage) => m.content) ?? [];
+            this.aiMessages.set(texts);
+            this.renderAdaptiveCards(texts);
+            this.isLoadingAi.set(false);
+          },
+          error: () => { this.isLoadingAi.set(false); }
+        });
+      }
+    };
     const rendered = card.render();
     container.appendChild(rendered);
   }
