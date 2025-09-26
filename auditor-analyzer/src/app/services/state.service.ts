@@ -20,5 +20,9 @@ export class StateService {
   computeAnomalies(periods?: any[]) {
     return this.http.post<{ anomalies: any }>(`/api/tools/anomalies`, periods ? { periods } : {});
   }
+
+  fetchUrl(url: string) {
+    return this.http.post<{ type: 'text' | 'pdf'; text?: string; data?: string; contentType?: string }>(`/api/fetch`, { url });
+  }
 }
 

@@ -51,6 +51,26 @@ app.post('/api/state/patch', (req, res) => {
   res.json({ ok: true, state });
 });
 
+// Fetch remote document (HTML or PDF) server-side to avoid CORS
+app.post('/api/fetch', async (req, res) => {
+  try {
+    const url = (req.body?.url || '').toString();
+    if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'Invalid URL' });
+    const resp = await fetch(url, { headers: { 'User-Agent': 'Auditor-Analyzer/1.0' } });
+    if (!resp.ok) return res.status(resp.status).json({ error: `Fetch failed`, status: resp.status });
+    const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+    if (contentType.includes('pdf') || url.toLowerCase().endsWith('.pdf')) {
+      const arr = new Uint8Array(await resp.arrayBuffer());
+      const b64 = Buffer.from(arr).toString('base64');
+      return res.json({ type: 'pdf', data: b64, contentType });
+    }
+    const text = await resp.text();
+    return res.json({ type: 'text', text, contentType });
+  } catch (e) {
+    res.status(500).json({ error: 'Fetch error', detail: String(e) });
+  }
+});
+
 const AgentRequestSchema = z.object({
   messages: z.array(
     z.object({ role: z.enum(['user','system','assistant','context']), content: z.string() })
@@ -181,6 +201,88 @@ app.post('/api/agent', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'Agent failure', detail: String(e) });
   }
+});
+
+// Generic tools: compute metrics and anomalies from periods
+const numberOrUndefined = (v) => {
+  if (v === null || v === undefined) return undefined;
+  const n = Number(String(v).replace(/[, ]+/g, ''));
+  return isNaN(n) ? undefined : n;
+};
+const mapRow = (row) => ({
+  periodLabel: String(row['period'] ?? row['Period'] ?? row['date'] ?? row['Date'] ?? ''),
+  revenue: numberOrUndefined(row['revenue'] ?? row['Revenue']),
+  costOfGoodsSold: numberOrUndefined(row['cogs'] ?? row['COGS'] ?? row['costOfGoodsSold']),
+  operatingExpenses: numberOrUndefined(row['opex'] ?? row['OperatingExpenses']),
+  netIncome: numberOrUndefined(row['netIncome'] ?? row['NetIncome']),
+  assets: numberOrUndefined(row['assets'] ?? row['Assets']),
+  liabilities: numberOrUndefined(row['liabilities'] ?? row['Liabilities']),
+  equity: numberOrUndefined(row['equity'] ?? row['Equity']),
+  interestExpense: numberOrUndefined(row['interest'] ?? row['InterestExpense']),
+  inventory: numberOrUndefined(row['inventory'] ?? row['Inventory']),
+  receivables: numberOrUndefined(row['receivables'] ?? row['Receivables']),
+  payables: numberOrUndefined(row['payables'] ?? row['Payables']),
+  cashFlowFromOperations: numberOrUndefined(row['cfo'] ?? row['CashFlowFromOperations'])
+});
+const average = (arr) => arr.length ? arr.reduce((a,b)=>a+b,0) / arr.length : 0;
+const stddev = (arr, mean) => arr.length ? Math.sqrt(arr.reduce((acc, v)=>acc+Math.pow(v-mean,2),0) / arr.length) : 0;
+
+app.post('/api/tools/metrics', (req, res) => {
+  const tenantId = getTenantId(req);
+  const sessionId = getSessionId(req);
+  if (!sessionId) return res.status(400).json({ error: 'Missing X-Session-Id' });
+  const state = getState(tenantId, sessionId);
+  const rowsRaw = Array.isArray(req.body?.periods) ? req.body.periods : (Array.isArray(state.periods) ? state.periods : []);
+  const rows = rowsRaw.map(mapRow);
+  const last = rows.at(-1) || {};
+  const result = {
+    profitability: {},
+    liquidity: {},
+    solvency: {},
+    efficiency: {}
+  };
+  const grossProfit = (last.revenue !== undefined && last.costOfGoodsSold !== undefined) ? (last.revenue - last.costOfGoodsSold) : undefined;
+  if (grossProfit !== undefined && last.revenue) result.profitability.grossMargin = grossProfit / last.revenue;
+  if (last.netIncome !== undefined && last.revenue) result.profitability.netMargin = last.netIncome / last.revenue;
+  if (last.netIncome !== undefined && last.equity) result.profitability.returnOnEquity = last.netIncome / last.equity;
+  const currentAssets = (last.assets ?? 0);
+  const currentLiabilities = (last.liabilities ?? 0);
+  if (currentLiabilities) {
+    result.liquidity.currentRatio = currentAssets / currentLiabilities;
+    const inventory = last.inventory ?? 0;
+    result.liquidity.quickRatio = (currentAssets - inventory) / currentLiabilities;
+  }
+  if (last.liabilities && last.equity) result.solvency.debtToEquity = last.liabilities / last.equity;
+  if (last.netIncome && last.interestExpense) result.solvency.interestCoverage = last.netIncome / last.interestExpense;
+  if (last.inventory && last.costOfGoodsSold) result.efficiency.inventoryTurnover = last.costOfGoodsSold / last.inventory;
+  const revs = rows.map(r => r.revenue).filter(v => typeof v === 'number');
+  if (revs.length && last.revenue) result.efficiency.receivablesTurnover = last.revenue / average(rows.map(r => r.receivables || 0));
+  state.financialMetrics = result;
+  state.periods = rows;
+  state.updatedAt = dayjs().toISOString();
+  res.json({ financialMetrics: result });
+});
+
+app.post('/api/tools/anomalies', (req, res) => {
+  const tenantId = getTenantId(req);
+  const sessionId = getSessionId(req);
+  if (!sessionId) return res.status(400).json({ error: 'Missing X-Session-Id' });
+  const state = getState(tenantId, sessionId);
+  const rowsRaw = Array.isArray(req.body?.periods) ? req.body.periods : (Array.isArray(state.periods) ? state.periods : []);
+  const rows = rowsRaw.map(mapRow);
+  const notes = [];
+  if (rows.length >= 3) {
+    const last3 = rows.slice(-3);
+    const rev = last3.map(r => r.revenue || 0);
+    const mean = average(rev);
+    const sd = stddev(rev, mean);
+    const last = rev.at(-1);
+    if (sd > 0 && Math.abs(last - mean) > 2 * sd) notes.push('Revenue is > 2σ from 3-period mean');
+  }
+  state.anomalies = { notes };
+  state.periods = rows;
+  state.updatedAt = dayjs().toISOString();
+  res.json({ anomalies: { notes } });
 });
 
 const port = process.env.PORT || 3001;

@@ -110,3 +110,13 @@ export interface AiSuggestion {
   rationale?: string;
 }
 
+export interface ActionItem {
+  id: string;
+  title: string;
+  owner?: string;
+  dueDate?: string; // ISO date
+  priority?: 'Low' | 'Medium' | 'High';
+  completed?: boolean;
+  notes?: string;
+}
+
