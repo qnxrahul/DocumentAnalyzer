@@ -72,8 +72,8 @@ export class AnalyzerPage {
     ];
     this.isLoadingAi.set(true);
     this.ai.analyze(messages).subscribe({
-      next: (res) => {
-        const texts = res.newMessages?.map(m => m.content) ?? [];
+      next: (res: { newMessages: AgentMessage[] }) => {
+        const texts = res.newMessages?.map((m: AgentMessage) => m.content) ?? [];
         this.aiMessages.set(texts);
         this.renderAdaptiveCards(texts);
         this.isLoadingAi.set(false);
@@ -101,6 +101,21 @@ export class AnalyzerPage {
         this.stateService.patchState({ periods: rows }).subscribe();
         this.stateService.computeMetrics(rows).subscribe();
         this.stateService.computeAnomalies(rows).subscribe();
+        // Kick off AI suggestions for XLSX uploads as well
+        const messages: AgentMessage[] = [
+          { role: 'user', content: 'Analyze financial XLSX just uploaded' },
+          { role: 'context', content: JSON.stringify({ context: this.context.state }) }
+        ];
+        this.isLoadingAi.set(true);
+        this.ai.analyze(messages).subscribe({
+          next: (res: { newMessages: AgentMessage[] }) => {
+            const texts = res.newMessages?.map((m: AgentMessage) => m.content) ?? [];
+            this.aiMessages.set(texts);
+            this.renderAdaptiveCards(texts);
+            this.isLoadingAi.set(false);
+          },
+          error: () => { this.isLoadingAi.set(false); }
+        });
       } finally {
         this.isLoadingParse.set(false);
       }
@@ -137,8 +152,8 @@ export class AnalyzerPage {
     ];
     this.isLoadingAi.set(true);
     this.ai.analyze(messages).subscribe({
-      next: (res) => {
-        const texts = res.newMessages?.map(m => m.content) ?? [];
+      next: (res: { newMessages: AgentMessage[] }) => {
+        const texts = res.newMessages?.map((m: AgentMessage) => m.content) ?? [];
         this.aiMessages.set(texts);
         this.renderAdaptiveCards(texts);
         this.isLoadingAi.set(false);
